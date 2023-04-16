@@ -490,8 +490,11 @@ public class OnRoadScreen extends ScreenAdapter {
             INDArray Rt;
             Rt = Preprocess.eulerAnglesToRotationMatrix(-augmentRot.getFloat(0, 1), -augmentRot.getFloat(0, 2), -augmentRot.getFloat(0, 0), 0.0, false);
             RtPath = Preprocess.eulerAnglesToRotationMatrix(-augmentRot.getFloat(0, 1), -augmentRot.getFloat(0, 2), -augmentRot.getFloat(0, 0), 1.22, false);
-            for (int i = 0; i< CommonModelF2.TRAJECTORY_SIZE; i++)
+            for (int i = 0; i< CommonModelF2.TRAJECTORY_SIZE; i++) {
                 parsed.position.get(0)[i] = Math.max(parsed.position.get(0)[i], minZ);
+                parsed.roadEdges.get(0).get(0)[i] = Math.max(parsed.roadEdges.get(0).get(0)[i], minZ);
+                parsed.roadEdges.get(1).get(0)[i] = Math.max(parsed.roadEdges.get(1).get(0)[i], minZ);
+            }
             path = Draw.getLaneCameraFrame(parsed.position, K, RtPath, 0.9f);
             lane0 = Draw.getLaneCameraFrame(parsed.laneLines.get(0), K, Rt, 0.07f);
             lane1 = Draw.getLaneCameraFrame(parsed.laneLines.get(1), K, Rt, 0.05f);
@@ -514,7 +517,9 @@ public class OnRoadScreen extends ScreenAdapter {
             alertText2.setText(controlState.getAlertText2().toString());
             alertStatus = controlState.getAlertStatus();
             state = controlState.getState();
-            maxCruiseSpeedLabel.setText(Integer.toString((int)controlState.getVCruise()));
+            float maxVel = controlState.getVCruise();
+            maxVel = isMetric ? maxVel * 3.6f : maxVel * 2.237f;
+            maxCruiseSpeedLabel.setText(Integer.toString((int)maxVel));
         }
 
         if (alertStatus==null || controlState==null) {
