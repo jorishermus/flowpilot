@@ -9,7 +9,7 @@
 int main(int argc, char *argv[]) {
   LOGW("starting boardd");
 
-  if (Hardware::PC()) {
+  if (!Hardware::PC()) {
     int err;
     err = util::set_realtime_priority(54);
     assert(err == 0);
