@@ -68,6 +68,10 @@ def get_device_state():
     msg.deviceState.cpuTempC = [bms.current for bms in temps['battery']]
   else:
     msg.deviceState.cpuTempC = [0.0]*8 # TODO: find a better way to get temps that works across platforms.
+  
+  # desktops have bad temperature readings causing false positives.
+  if not is_android():
+    msg.deviceState.cpuTempC = [0.0]*8
 
   msg.deviceState.networkType = log.DeviceState.NetworkType.none
   msg.deviceState.networkStrength = log.DeviceState.NetworkStrength.unknown
