@@ -6,57 +6,67 @@ import ai.flow.android.vision.SNPEModelRunner;
 import ai.flow.app.FlowUI;
 import ai.flow.common.ParamsInterface;
 import ai.flow.common.Path;
+import ai.flow.common.transformations.Camera;
+import ai.flow.hardware.HardwareManager;
 import ai.flow.launcher.Launcher;
+import ai.flow.modeld.*;
 import ai.flow.sensor.SensorInterface;
-import ai.flow.modeld.ModelExecutor;
-import ai.flow.modeld.ModelRunner;
-import ai.flow.modeld.TNNModelRunner;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Application;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.os.Build;
-import android.os.Bundle;
+import android.net.Uri;
 import android.os.Process;
+import android.os.*;
 import android.provider.Settings;
+import android.system.ErrnoException;
 import android.system.Os;
 import android.telephony.TelephonyManager;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.Toast;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-import com.badlogic.gdx.backends.android.AndroidApplication;
+import androidx.fragment.app.FragmentActivity;
+import androidx.fragment.app.FragmentTransaction;
 import com.badlogic.gdx.backends.android.AndroidApplicationConfiguration;
-
-import java.util.*;
-
+import com.badlogic.gdx.backends.android.AndroidFragmentApplication;
 import org.acra.ACRA;
 import org.acra.BuildConfig;
 import org.acra.ErrorReporter;
 import org.acra.config.CoreConfigurationBuilder;
+import org.acra.config.HttpSenderConfigurationBuilder;
 import org.acra.config.ToastConfigurationBuilder;
 import org.acra.data.StringFormat;
-import org.acra.config.HttpSenderConfigurationBuilder;
 import org.acra.sender.HttpSender;
+import org.jetbrains.annotations.NotNull;
+
+import java.util.*;
+
+import static android.os.Build.VERSION.SDK_INT;
 
 /** Launches the Android application. */
-public class AndroidLauncher extends AndroidApplication {
+public class AndroidLauncher extends FragmentActivity implements AndroidFragmentApplication.Callbacks {
 	public static Map<String, SensorInterface> sensors;
 	public static Context appContext;
 	public static ParamsInterface params;
-	List<String> requiredPermissions = Arrays.asList(android.Manifest.permission.CAMERA,
-			android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
-			android.Manifest.permission.READ_EXTERNAL_STORAGE,
-			android.Manifest.permission.RECORD_AUDIO,
-			android.Manifest.permission.READ_PHONE_STATE,
+	List<String> requiredPermissions = Arrays.asList(Manifest.permission.CAMERA,
+			Manifest.permission.WRITE_EXTERNAL_STORAGE,
+			Manifest.permission.READ_EXTERNAL_STORAGE,
+			Manifest.permission.RECORD_AUDIO,
+			Manifest.permission.READ_PHONE_STATE,
+			Manifest.permission.WAKE_LOCK,
 			Manifest.permission.VIBRATE);
 
 	@SuppressLint("HardwareIds")
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		appContext = getContext();
+		appContext = getApplicationContext();
 
 		// set environment variables from intent extras.
 		Bundle bundle = getIntent().getExtras();
@@ -71,8 +81,20 @@ public class AndroidLauncher extends AndroidApplication {
 			}
 		}
 
+		try {
+			Os.setenv("USE_GPU", "1", true);
+		} catch (ErrnoException e) {
+			throw new RuntimeException(e);
+		}
+		
+		HardwareManager androidHardwareManager = new AndroidHardwareManager(getWindow());
 		// keep app from dimming due to inactivity.
-		getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+		androidHardwareManager.enableScreenWakeLock(true);
+
+		// get wakelock so we can switch windows without getting killed.
+		PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+		PowerManager.WakeLock wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ai.flow.app::wakelock");
+		wakeLock.acquire();
 
 		// tune system for max throughput. Does this really help ?
 		//if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -83,17 +105,45 @@ public class AndroidLauncher extends AndroidApplication {
 		requestPermissions();
 		while (!checkPermissions()){
 			try {
-				Thread.sleep(500);
+				Thread.sleep(100);
 			} catch (InterruptedException e) {
 				throw new RuntimeException(e);
 			}
 		}
 
-		params = ParamsInterface.getInstance();
 		TelephonyManager telephonyManager = (TelephonyManager)getSystemService(Context.TELEPHONY_SERVICE);
 		String dongleID = "";
 		if (telephonyManager != null) {
 			dongleID = Settings.Secure.getString(appContext.getContentResolver(), Settings.Secure.ANDROID_ID);
+		}
+
+		// TODO, this is very hacky, find simpler way
+		params = ParamsInterface.getInstance();
+		boolean done = false;
+		int keyvaldFailCount = 1;
+		while (!done){
+			try {
+				if (!params.initialized()){
+					if (keyvaldFailCount <= 20 & keyvaldFailCount % 20 == 0)
+						Toast.makeText(appContext, "Waiting for flowpilot services to start", Toast.LENGTH_LONG).show();
+					else if (keyvaldFailCount > 20 & (keyvaldFailCount-20) % 50 == 0)
+						Toast.makeText(appContext, "Waiting for flowpilot services to start. Did you start 'launch_flowpilot.sh' ?", Toast.LENGTH_LONG).show();
+					try {
+						Thread.sleep(200);
+					} catch (InterruptedException ex) {
+						throw new RuntimeException(ex);
+					}
+					params.dispose();
+					params = ParamsInterface.getInstance();
+					keyvaldFailCount++;
+				}
+				else{
+					done = true;
+					params.dispose();
+					params = ParamsInterface.getInstance();
+				}
+			} catch (Exception e){
+			}
 		}
 
 		// populate device specific info.
@@ -102,7 +152,7 @@ public class AndroidLauncher extends AndroidApplication {
 		params.put("DeviceModel", Build.MODEL);
 
 		AndroidApplicationConfiguration configuration = new AndroidApplicationConfiguration();
-		CameraManager cameraManager = new CameraManager(appContext, 20, "roadCameraState");
+		CameraManager cameraManager = new CameraManager(getApplication().getApplicationContext(), 20);
 		SensorManager sensorManager = new SensorManager(appContext, "sensorEvents", 50);
 		sensors = new HashMap<String, SensorInterface>() {{
 			put("roadCamera", cameraManager);
@@ -111,7 +161,7 @@ public class AndroidLauncher extends AndroidApplication {
 
 		int pid = Process.myPid();
 
-		String modelPath = Path.internal("selfdrive/assets/models/supercombo");
+		String modelPath = Path.getModelDir();
 
 		ModelRunner model;
 		boolean useGPU = true; // always use gpus on android phones.
@@ -120,7 +170,9 @@ public class AndroidLauncher extends AndroidApplication {
 		else
 			model = new TNNModelRunner(modelPath, useGPU);
 
-		Launcher launcher = new Launcher(sensors, new ModelExecutor(model));
+		ModelExecutor modelExecutor;
+		modelExecutor = new ModelExecutorF2(model);
+		Launcher launcher = new Launcher(sensors, modelExecutor);
 
 		ErrorReporter ACRAreporter = ACRA.getErrorReporter();
 		ACRAreporter.putCustomData("DongleId", dongleID);
@@ -132,7 +184,24 @@ public class AndroidLauncher extends AndroidApplication {
 		ACRAreporter.putCustomData("GitBranch", params.getString("GitBranch"));
 		ACRAreporter.putCustomData("GitRemote", params.getString("GitRemote"));
 
-		initialize(new FlowUI(launcher, pid), configuration);
+		MainFragment fragment = new MainFragment(new FlowUI(launcher, androidHardwareManager, pid));
+		cameraManager.setLifeCycleFragment(fragment);
+		FragmentTransaction trans = getSupportFragmentManager().beginTransaction();
+		trans.replace(android.R.id.content, fragment);
+		trans.commit();
+	}
+
+	public static class MainFragment extends AndroidFragmentApplication {
+		FlowUI flowUI;
+
+		MainFragment(FlowUI flowUI) {
+			this.flowUI = flowUI;
+		}
+
+		@Override
+		public View onCreateView(@NotNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+			return initializeForView(flowUI);
+		}
 	}
 
 	@Override
@@ -164,7 +233,7 @@ public class AndroidLauncher extends AndroidApplication {
 				.setEnabled(true);
 		builder.getPluginConfigurationBuilder(ToastConfigurationBuilder.class)
 				.withText("crash report sent to flowpilot maintainers")
-				.setEnabled(true);
+				.setEnabled(false);
 
 		ACRA.init((Application) base.getApplicationContext(), builder);
 	}
@@ -181,10 +250,13 @@ public class AndroidLauncher extends AndroidApplication {
 	private boolean checkPermissions() {
 		for (String permission: requiredPermissions){
 			if (ContextCompat.checkSelfPermission(appContext, permission) != PackageManager.PERMISSION_GRANTED) {
-				System.out.println(permission);
 				return false;
 			}
 		}
+
+		// External storage access permissions for android 12 and above.
+		if (SDK_INT >= Build.VERSION_CODES.R)
+			return Environment.isExternalStorageManager();
 		return true;
 	}
 
@@ -196,5 +268,28 @@ public class AndroidLauncher extends AndroidApplication {
 		}
 		if (!requestPermissions.isEmpty())
 			ActivityCompat.requestPermissions(this, requestPermissions.toArray(new String[0]), 1);
+
+		// External storage access permissions for android 12 and above.
+		if (SDK_INT >= Build.VERSION_CODES.R) {
+			if (Environment.isExternalStorageManager())
+				return;
+			try {
+				Toast.makeText(appContext, "grant external storage access to flowpilot.", Toast.LENGTH_LONG).show();
+				Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+				intent.addCategory("android.intent.category.DEFAULT");
+				intent.setData(Uri.parse(String.format("package:%s",getApplicationContext().getPackageName())));
+				startActivityForResult(intent, 6969);
+			} catch (Exception e) {
+				Intent intent = new Intent();
+				intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+				startActivityForResult(intent, 6969);
+			}
+		}
+	}
+
+	@Override
+	public void exit() {
+
 	}
 }
+

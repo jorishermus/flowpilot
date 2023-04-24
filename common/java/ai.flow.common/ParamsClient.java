@@ -14,14 +14,18 @@ public class ParamsClient extends ParamsInterface {
     public ZMQ.Socket sockGet;
     public ZMQ.Socket sockPut;
     public ZMQ.Socket sockDel;
+    public ZMQ.Poller poller = context.poller();
 
     public ParamsClient(){
         sockGet = context.socket(ZMQ.REQ);
         sockPut = context.socket(ZMQ.REQ);
         sockDel = context.socket(ZMQ.REQ);
         sockGet.connect(Utils.getSocketPath("6001")); // get socket
-        sockPut.connect(Utils.getSocketPath("6002")); // get socket
-        sockDel.connect(Utils.getSocketPath("6003")); // get socket
+        sockPut.connect(Utils.getSocketPath("6002")); // put socket
+        sockDel.connect(Utils.getSocketPath("6003")); // delete socket
+
+        sockGet.setLinger(50);
+        poller.register(sockGet, ZMQ.Poller.POLLIN);
     }
 
     public ZMsg makeFrame(byte[]... bytes){
@@ -147,6 +151,18 @@ public class ParamsClient extends ParamsInterface {
             return getBool(key) == value;
         }
         return false;
+    }
+
+    public boolean initialized(){
+        sockGet.send("Passive".getBytes(), 0);
+        poller.poll(50);
+        return poller.pollin(0);
+    }
+
+    public void dispose(){
+        sockGet.close();
+        sockDel.close();
+        sockPut.close();
     }
 }
 
