@@ -903,6 +903,7 @@ FW_VERSIONS = {
   },
   CAR.AUDI_A3_MK3: {
     (Ecu.engine, 0x7e0, None): [
+      b'\xf1\x8704E906016N \xf1\x890002',
       b'\xf1\x8704E906023AN\xf1\x893695',
       b'\xf1\x8704E906023AR\xf1\x893440',
       b'\xf1\x8704E906023BL\xf1\x895190',
@@ -922,6 +923,7 @@ FW_VERSIONS = {
     ],
     (Ecu.transmission, 0x7e1, None): [
       b'\xf1\x870CW300044T \xf1\x895245',
+      b'\xf1\x870CW300047S \XF1\X891602',
       b'\xf1\x870CW300048  \xf1\x895201',
       b'\xf1\x870D9300012  \xf1\x894912',
       b'\xf1\x870D9300012  \xf1\x894931',
@@ -969,6 +971,7 @@ FW_VERSIONS = {
     ],
     (Ecu.fwdRadar, 0x757, None): [
       b'\xf1\x875Q0907567N \xf1\x890400\xf1\x82\x0101',
+      b'\xf1\x875Q0907572B \xf1\890400',
       b'\xf1\x875Q0907572F \xf1\x890400\xf1\x82\x0101',
       b'\xf1\x875Q0907572D \xf1\x890304\xf1\x82\x0101',
       b'\xf1\x875Q0907572G \xf1\x890571',
