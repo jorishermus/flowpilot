@@ -20,20 +20,20 @@ public class SetUpScreen extends ScreenAdapter {
     @Override
     public void show() {
 
-        if (!params.existsAndCompare("HasAcceptedTerms", true)) {
-            appContext.setScreen(new TermsScreen(appContext));
-            return;
-        }
+     //   if (!params.existsAndCompare("HasAcceptedTerms", true)) {
+     //       appContext.setScreen(new TermsScreen(appContext));
+     //       return;
+     //   }
 
-        if (!params.exists("UserToken")) {
-            appContext.setScreen(new RegisterScreen(appContext));
-            return;
-        }
+    //    if (!params.exists("UserToken")) {
+     //       appContext.setScreen(new RegisterScreen(appContext));
+     //       return;
+      //  }
 
-        if (!params.existsAndCompare("CompletedTrainingVersion", true)){
-            appContext.setScreen(new TrainingScreen(appContext));
-            return;
-        }
+       // if (!params.existsAndCompare("CompletedTrainingVersion", true)){
+       //     appContext.setScreen(new TrainingScreen(appContext));
+       //     return;
+      //  }
 
         if (!params.exists(fcamIntrinsicParam)){
            appContext.launcher.startSensorD();
