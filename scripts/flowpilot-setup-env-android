@@ -80,8 +80,10 @@ setup_nonroot_env() {
 setup_root_env() {
 	info "Preparing to install flowpilot root env ..."
         pkg install tsu
+	info "end of tsu"
         ROOTFS_TAR="ubuntu-focal-core-cloudimg-arm64-root-2020.12.10.tar.gz"
         wget -q --show-progress --no-clobber --tries=5 https://github.com/termux/proot-distro/releases/download/v1.2-ubuntu-focal-rootfs/$ROOTFS_TAR -P /sdcard/flowpilot/Downloads/
+	info "End of ubuntu ARM64 root"
 
         CHROOT=$HOME/flowpilot_env_root
         mkdir -p $CHROOT
